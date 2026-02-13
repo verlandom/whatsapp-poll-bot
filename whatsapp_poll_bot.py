@@ -5,20 +5,24 @@ Sends weekly reminders to create WhatsApp polls for church service schedule
 """
 
 import asyncio
+import sys
 from datetime import datetime, timedelta
 from telegram import Bot
 from telegram.error import TelegramError
 import schedule
 import time
+import os
+
+# Force immediate output flushing for Railway logs
+sys.stdout.flush()
 
 # ============================================
 # CONFIGURATION - UPDATE THESE VALUES
 # ============================================
-import os
 
 # Get from environment variables (for cloud deployment) or use defaults
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "YOUR_BOT_TOKEN_HERE")  # Get from @BotFather
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', "YOUR_CHAT_ID_HERE")      # Your personal chat ID or group chat ID
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "YOUR_BOT_TOKEN_HERE")
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', "YOUR_CHAT_ID_HERE")
 
 # Seksi names for each week
 SEKSI_SCHEDULE = {
@@ -30,34 +34,28 @@ SEKSI_SCHEDULE = {
 }
 
 
+def log(message):
+    """Print with timestamp and flush immediately for Railway"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{timestamp}] {message}", flush=True)
+
+
 def get_week_of_month(date):
-    """
-    Calculate which week of the month a date falls in (1-5)
-    """
-    first_day = date.replace(day=1)
-    # Get the day of month
+    """Calculate which week of the month a date falls in (1-5)"""
     day = date.day
-    # Calculate week number (1-indexed)
     week = (day - 1) // 7 + 1
     return min(week, 5)  # Cap at 5 weeks
 
 
 def get_next_sunday(from_date=None):
-    """
-    Get the date of the upcoming Sunday in the same week
-    If today is Tuesday, get the Sunday that comes after (in the same week)
-    """
+    """Get the date of the upcoming Sunday in the same week"""
     if from_date is None:
         from_date = datetime.now()
     
-    # Calculate days until Sunday (0=Monday, 6=Sunday)
-    # For Tuesday (weekday=1): 6-1 = 5 days until Sunday
     days_until_sunday = (6 - from_date.weekday()) % 7
     
-    # If today is Sunday (days_until_sunday = 0), keep it as today
-    # Otherwise calculate the upcoming Sunday
     if days_until_sunday == 0:
-        next_sunday = from_date  # Today is Sunday
+        next_sunday = from_date
     else:
         next_sunday = from_date + timedelta(days=days_until_sunday)
     
@@ -65,9 +63,7 @@ def get_next_sunday(from_date=None):
 
 
 def format_indonesian_date(date):
-    """
-    Format date in Indonesian style: "16 Februari 2025"
-    """
+    """Format date in Indonesian style: '16 Februari 2025'"""
     months_id = {
         1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
         5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
@@ -77,19 +73,13 @@ def format_indonesian_date(date):
 
 
 def generate_poll_message():
-    """
-    Generate the reminder message with poll details
-    """
+    """Generate the reminder message with poll details"""
     today = datetime.now()
     next_sunday = get_next_sunday(today)
-    
-    # Determine which week of the month next Sunday falls in
     week_number = get_week_of_month(next_sunday)
-    
     seksi_name = SEKSI_SCHEDULE.get(week_number, "Seksi PI")
     sunday_date = format_indonesian_date(next_sunday)
     
-    # Generate the poll question
     poll_question = f"Untuk Minggu {sunday_date} apakah {seksi_name} dan Sola Gratia akan melayani?"
     
     message = f"""🔔 **Pengingat Polling WhatsApp**
@@ -115,10 +105,9 @@ _{poll_question}_
 
 
 async def send_telegram_message():
-    """
-    Send the reminder message via Telegram
-    """
+    """Send the reminder message via Telegram"""
     try:
+        log("📤 Sending message to Telegram...")
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
         message = generate_poll_message()
         
@@ -127,71 +116,68 @@ async def send_telegram_message():
             text=message,
             parse_mode='Markdown'
         )
-        print(f"✅ Message sent successfully at {datetime.now()}")
+        log("✅ Message sent successfully!")
         
     except TelegramError as e:
-        print(f"❌ Error sending message: {e}")
+        log(f"❌ Telegram Error: {e}")
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        log(f"❌ Unexpected error: {e}")
 
 
 def run_async_task():
-    """
-    Wrapper to run async function in sync context
-    """
+    """Wrapper to run async function in sync context"""
     asyncio.run(send_telegram_message())
 
 
 def schedule_weekly_reminder():
-    """
-    Schedule the reminder to run every Tuesday
-    """
+    """Schedule the reminder to run every Tuesday"""
     # Schedule for every Tuesday at 9:00 AM
     schedule.every().tuesday.at("09:00").do(run_async_task)
     
-    print("=" * 50)
-    print("🤖 Bot started successfully!")
-    print("📅 Scheduled to run every Tuesday at 09:00")
-    print("⏳ Waiting for scheduled time...")
-    print(f"🕐 Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📍 Next Tuesday at 09:00")
-    print("\nPress Ctrl+C to stop the bot.")
-    print("=" * 50)
-    print()
+    log("=" * 50)
+    log("🤖 WhatsApp Poll Reminder Bot STARTED")
+    log("=" * 50)
+    log(f"📅 Scheduled: Every Tuesday at 09:00 WIB")
+    log(f"🕐 Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    log(f"📍 Bot Token: {'✅ Set' if TELEGRAM_BOT_TOKEN != 'YOUR_BOT_TOKEN_HERE' else '❌ NOT SET'}")
+    log(f"📍 Chat ID: {'✅ Set' if TELEGRAM_CHAT_ID != 'YOUR_CHAT_ID_HERE' else '❌ NOT SET'}")
+    log("⏳ Bot is running and waiting for scheduled time...")
+    log("=" * 50)
     
     # Keep the script running indefinitely
+    counter = 0
     try:
         while True:
             schedule.run_pending()
             time.sleep(60)  # Check every minute
+            
+            # Log heartbeat every 60 minutes to show bot is alive
+            counter += 1
+            if counter % 60 == 0:
+                log(f"💓 Bot still running... (uptime: {counter} minutes)")
+                
     except KeyboardInterrupt:
-        print("\n👋 Bot stopped by user")
+        log("👋 Bot stopped by user")
     except Exception as e:
-        print(f"\n❌ Bot stopped due to error: {e}")
-        # Don't exit, keep trying
+        log(f"❌ Error in main loop: {e}")
+        log("🔄 Restarting in 60 seconds...")
         time.sleep(60)
-        schedule_weekly_reminder()  # Restart
+        schedule_weekly_reminder()
 
 
 def test_message():
-    """
-    Test function to send a message immediately (for testing)
-    """
-    print("🧪 Testing message send...")
+    """Test function to send a message immediately"""
+    log("🧪 TEST MODE - Sending message now...")
     run_async_task()
+    log("✅ Test completed")
 
 
 if __name__ == "__main__":
-    import sys
-    
     # Check if running in test mode
     if len(sys.argv) > 1 and sys.argv[1] == "test":
-        print("=" * 50)
-        print("TEST MODE - Sending message now")
-        print("=" * 50)
+        log("=" * 50)
+        log("TEST MODE ACTIVATED")
+        log("=" * 50)
         test_message()
     else:
-        print("=" * 50)
-        print("WhatsApp Poll Reminder Bot")
-        print("=" * 50)
         schedule_weekly_reminder()
