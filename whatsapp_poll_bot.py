@@ -17,8 +17,8 @@ import time
 import os
 
 # Get from environment variables (for cloud deployment) or use defaults
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "8431033569:AAHv0p2ycJyf0siowN6H3PRMYIYUg9ERgsQ")  # Get from @BotFather
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', "1316462794")      # Your personal chat ID or group chat ID
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', "YOUR_BOT_TOKEN_HERE")  # Get from @BotFather
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', "YOUR_CHAT_ID_HERE")      # Your personal chat ID or group chat ID
 
 # Seksi names for each week
 SEKSI_SCHEDULE = {
@@ -149,16 +149,28 @@ def schedule_weekly_reminder():
     # Schedule for every Tuesday at 9:00 AM
     schedule.every().tuesday.at("09:00").do(run_async_task)
     
+    print("=" * 50)
     print("🤖 Bot started successfully!")
     print("📅 Scheduled to run every Tuesday at 09:00")
     print("⏳ Waiting for scheduled time...")
     print(f"🕐 Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("\nPress Ctrl+C to stop the bot.\n")
+    print(f"📍 Next Tuesday at 09:00")
+    print("\nPress Ctrl+C to stop the bot.")
+    print("=" * 50)
+    print()
     
-    # Keep the script running
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Check every minute
+    # Keep the script running indefinitely
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # Check every minute
+    except KeyboardInterrupt:
+        print("\n👋 Bot stopped by user")
+    except Exception as e:
+        print(f"\n❌ Bot stopped due to error: {e}")
+        # Don't exit, keep trying
+        time.sleep(60)
+        schedule_weekly_reminder()  # Restart
 
 
 def test_message():
